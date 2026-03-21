@@ -405,6 +405,60 @@ def main() -> None:
                 f"for config '{config_name}'"
             )
 
+        # Write per-instance eval scores to the memory_experiments repo
+        eval_results_path = os.path.join(config_output_dir, "eval_results.json")
+        if os.path.isfile(eval_results_path):
+            with open(eval_results_path) as fh:
+                instance_results = json.load(fh)
+            overall_accuracy = (
+                sum(instance_results.values()) / len(instance_results)
+                if instance_results
+                else 0.0
+            )
+            scores_payload = {
+                "config": config_name,
+                "overall_accuracy": overall_accuracy,
+                "instance_results": instance_results,
+            }
+            scores_sbp_dir = os.path.join(mem_path, "sbp")
+            os.makedirs(scores_sbp_dir, exist_ok=True)
+            scores_path = os.path.join(scores_sbp_dir, f"eval_scores_{config_name}.json")
+            with open(scores_path, "w") as fh:
+                json.dump(scores_payload, fh, indent=2)
+            print(f"\nWrote eval scores to {scores_path}")
+
+            repo_path = mem_path
+            git_commands = [
+                ("add", ["git", "-C", repo_path, "add", scores_path]),
+                (
+                    "commit",
+                    [
+                        "git", "-C", repo_path, "commit", "-m",
+                        f"Add eval scores for config '{config_name}'",
+                    ],
+                ),
+                ("push", ["git", "-C", repo_path, "push"]),
+            ]
+            for verb, git_cmd in git_commands:
+                git_result = subprocess.run(git_cmd, capture_output=True, text=True)
+                if git_result.returncode != 0:
+                    # "nothing to commit" is not an error — skip silently
+                    if verb == "commit" and "nothing to commit" in git_result.stdout + git_result.stderr:
+                        print("No changes to commit for eval scores (file unchanged).")
+                        break
+                    print(
+                        f"Warning: git {verb} failed: "
+                        f"{git_result.stderr.strip() or git_result.stdout.strip()}"
+                    )
+                else:
+                    if git_result.stdout.strip():
+                        print(git_result.stdout.strip())
+        else:
+            print(
+                f"Warning: eval_results.json not found at {eval_results_path}; "
+                "skipping eval scores write."
+            )
+
     if args.convert_only:
         print("\nPatch conversion complete (--convert_only was set; evaluation skipped).")
     else:

@@ -730,6 +730,9 @@ def main():
 
     with open(os.path.join(args.output_dir, "eval_results.json"), "w") as f:
         json.dump(eval_results, f)
+    print("Per-instance results:")
+    for instance_id, passed in sorted(eval_results.items()):
+        print(f"  {instance_id}: {str(passed).lower()}")
     print("Overall accuracy: ", sum(eval_results.values()) / len(eval_results))
 
 
