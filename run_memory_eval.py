@@ -410,19 +410,29 @@ def main() -> None:
         if os.path.isfile(eval_results_path):
             with open(eval_results_path) as fh:
                 instance_results = json.load(fh)
+
+            # Merge with any pre-existing scores (new results take precedence)
+            scores_sbp_dir = os.path.join(mem_path, "sbp")
+            os.makedirs(scores_sbp_dir, exist_ok=True)
+            scores_path = os.path.join(scores_sbp_dir, f"eval_scores_{config_name}.json")
+            if os.path.isfile(scores_path):
+                with open(scores_path) as fh:
+                    existing_payload = json.load(fh)
+                existing_instance_results = existing_payload.get("instance_results", {})
+                merged_instance_results = {**existing_instance_results, **instance_results}
+            else:
+                merged_instance_results = instance_results
+
             overall_accuracy = (
-                sum(instance_results.values()) / len(instance_results)
-                if instance_results
+                sum(merged_instance_results.values()) / len(merged_instance_results)
+                if merged_instance_results
                 else 0.0
             )
             scores_payload = {
                 "config": config_name,
                 "overall_accuracy": overall_accuracy,
-                "instance_results": instance_results,
+                "instance_results": merged_instance_results,
             }
-            scores_sbp_dir = os.path.join(mem_path, "sbp")
-            os.makedirs(scores_sbp_dir, exist_ok=True)
-            scores_path = os.path.join(scores_sbp_dir, f"eval_scores_{config_name}.json")
             with open(scores_path, "w") as fh:
                 json.dump(scores_payload, fh, indent=2)
             print(f"\nWrote eval scores to {scores_path}")

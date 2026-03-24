@@ -623,16 +623,27 @@ def main():
 
     with open(args.patch_path, "r") as f:
         patches_to_run = json.load(f)
-    eval_results = {}
+
+    # Load existing results so previously-evaluated instances are not re-run
+    existing_results_path = os.path.join(args.output_dir, "eval_results.json")
+    if not args.redo and os.path.isfile(existing_results_path):
+        with open(existing_results_path, "r") as f:
+            eval_results = json.load(f)
+        print(f"Loaded {len(eval_results)} existing result(s) from {existing_results_path}")
+    else:
+        eval_results = {}
 
     valid_patches = []
     missing_instances = []
+    skipped_instances = []
     for patch_sample in patches_to_run:
         instance_id = patch_sample["instance_id"]
-        if instance_id in raw_sample_df.index:
-            valid_patches.append(patch_sample)
-        else:
+        if instance_id not in raw_sample_df.index:
             missing_instances.append(instance_id)
+        elif not args.redo and instance_id in eval_results:
+            skipped_instances.append(instance_id)
+        else:
+            valid_patches.append(patch_sample)
 
     if missing_instances:
         print(
@@ -644,6 +655,12 @@ def main():
             print(f"  ... and {len(missing_instances) - 5} more")
         print(
             f"Proceeding with {len(valid_patches)} valid patches out of {len(patches_to_run)} total patches"
+        )
+
+    if skipped_instances:
+        print(
+            f"Skipping {len(skipped_instances)} already-evaluated instance(s) "
+            f"(pass --redo to force re-evaluation). {len(valid_patches)} new instance(s) to evaluate."
         )
 
     # Select runtime
@@ -733,7 +750,10 @@ def main():
     print("Per-instance results:")
     for instance_id, passed in sorted(eval_results.items()):
         print(f"  {instance_id}: {str(passed).lower()}")
-    print("Overall accuracy: ", sum(eval_results.values()) / len(eval_results))
+    if eval_results:
+        print("Overall accuracy: ", sum(eval_results.values()) / len(eval_results))
+    else:
+        print("Overall accuracy: N/A (no results)")
 
 
 if __name__ == "__main__":
